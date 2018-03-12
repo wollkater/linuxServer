@@ -1,0 +1,55 @@
+version: '2'
+
+services:
+
+  git:
+    image: 'gogs/gogs'
+    restart: always
+    hostname: 'git.u-42.de'
+    environment:
+  # Add any other gitlab.rb configuration here, each on its own line
+      VIRTUAL_HOST: git.u-42.de
+      LETSENCRYPT_HOST: git.u-42.de
+      LETSENCRYPT_EMAIL: it.raddatz@gmail.com
+      VIRTUAL_PORT: 3000
+    ports:
+      - '2222:22'
+      - '3000'
+    volumes:
+      -  '~/gogs:/data'
+  nginx-proxy:
+    image: jwilder/nginx-proxy
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - "~/nginx/vhost.d:/etc/nginx/vhost.d"
+      - "/usr/share/nginx/html"
+      - "/var/run/docker.sock:/tmp/docker.sock:ro"
+      - "~/nginx/certs:/etc/nginx/certs:ro"
+
+  letsencrypt-nginx-proxy-companion:
+    image: jrcs/letsencrypt-nginx-proxy-companion
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock:ro"
+      - "~/nginx/certs:/etc/nginx/certs:rw"
+    volumes_from:
+      - "nginx-proxy"
+  postgres:
+    image: postgres:9.6.2-alpine
+    environment:
+      POSTGRES_USER: catalog
+      POSTGRES_DB: catalog
+  app:
+    build: catalog/.
+    command: flask run -h 0.0.0.0 -p 80
+    depends_on:
+      - postgres
+    volumes:
+      - "~/catalog:/usr/src/app"
+    environment:
+      VIRTUAL_HOST: udacity.u-42.de
+      LETSENCRYPT_HOST: udacity.u-42.de
+      DATABASE_URL: postgres://catalog@postgres/catalog
+    ports:
+       - "80"
